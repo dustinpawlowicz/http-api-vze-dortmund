@@ -1,0 +1,5 @@
+# Specifies intentionally untracked files to ignore when using Git
+# https://github.com/github/gitignore/blob/master/Node.gitignore
+
+# dotenv environment variables file
+.env

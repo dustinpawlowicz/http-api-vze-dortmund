@@ -4,7 +4,7 @@ const helper = require('../helpers/helper');
 
 /**
  *  loginUser - Requesting a user with the user data required on the client.
- *              Requirements for a Successful Request: user existing, user activated, password matches
+ *              Requirements for a Successful Request: user is authenticated
  * 
  *  @param request  http.IncomingMessage - used to get the username and password from the body of the post request
  *  @param response http.ServerResponse - used to send data back to the client
@@ -13,35 +13,23 @@ const helper = require('../helpers/helper');
  *  Do not specify which user data is specifically wrong to not disclose information about existing user data
  */
 exports.login = async (request, response) => {
-    const { username, password } = request.body;
-   
+    const { username, password } = request.body;  
     try {
-        if(!(username && password)) {
-            throw new IncompleteDataError('Username and password required.');
-        }
-
-        if(!await isUserExisting(username)) {
+        if(!await isAuthenticatedUser(username, password)) {
             throw new IncorrectDataError();
         }
 
-        const queryString = `SELECT u.username, u.password, u.first_name, u.last_name, r.role_name
+        const queryString = `SELECT u.username, u.first_name, u.last_name, r.role_name
                 FROM vze_user u
                 INNER JOIN vze_role r ON r.id = u.vze_role_id
                 WHERE u.username='${username}'`;
-    
-        const isActivated = isUserActivated(username);
-        const data = await helper.executeQuery(queryString);
-        
-        if(!await isActivated || !await comparePassword(password, data['password'])) {
-            throw new IncorrectDataError();
-        }
 
-        delete data['password'];
+        const data = await helper.executeQuery(queryString);
         console.log('Login request sucessfull:\n ', data);
-        return successResponse(response, 'USER_REQUESTED', 'User request successful.', data);
+        return helper.successResponse(response, 'USER_REQUESTED', 'User request successful.', data);
     } catch(error) {
         console.warn(error);
-        return errorResponse(response, error.key, error.message);
+        return helper.errorResponse(response, error.key, error.message);
     }
 }
 
@@ -55,13 +43,12 @@ exports.login = async (request, response) => {
  */
 exports.register = async function (request, response) {
     const { username, password, firstName, lastName, roleName, adminUsername, adminPassword } = request.body;
-
     try {
         if(!(username && password && firstName && lastName && roleName && adminUsername && adminPassword)) {
             throw new IncompleteDataError('Registration data incomplete.');
         }
         
-        const isAdminAccess = isAdmin(adminUsername, adminPassword);
+        const isAdminAccess = isAuthenticatedAdmin(adminUsername, adminPassword);
         const isExisting = isUserExisting(username);
         const hash = hashPassword(password);
 
@@ -78,11 +65,11 @@ exports.register = async function (request, response) {
                 (SELECT id FROM vze_role WHERE role_name = '${roleName}'))`;
         await helper.executeQuery(queryString);
             
-        console.log('New user added. Username: %s, Role: %s', username, roleName);
-        return successResponse(response, 'USER_CREATED', 'The user was successfully created.');
+        console.log('New user \'%s\' with the role of an \'%s\' added.', username, roleName);
+        return helper.successResponse(response, 'USER_CREATED', 'The user was successfully created.');
     } catch(error) {
         console.warn(error);
-        return errorResponse(response, error.key, error.message);
+        return helper.errorResponse(response, error.key, error.message);
     }
 }
 
@@ -98,31 +85,27 @@ exports.register = async function (request, response) {
  */
 exports.changePassword = async (request, response) => {
     const { username, password, newPassword } = request.body;
-
     try {
         if(!(username && password && newPassword)) {
             throw new IncompleteDataError('Change password data is incomplete.');
         }
+        if(password === newPassword) {
+            throw new IncorrectDataError('Choose a different password.');
+        }
 
-        if(!await isUserExisting(username)) {
+        if(!await isAuthenticatedUser(username, password)) {
             throw new IncorrectDataError();
         }
-        
-        const data = helper.executeQuery(`SELECT password FROM vze_user WHERE username= '${username}'`);
+
         const hash = hashPassword(newPassword);
-
-        if(!await comparePassword(password, (await data).password)) {
-            throw new IncorrectDataError();
-        }
-
         const queryString =  `UPDATE vze_user SET password = '${(await hash)}' WHERE username = '${username}'`;   
         await helper.executeQuery(queryString);
   
         console.log('User password successfully changed. Username: %s', username);
-        return successResponse(response, 'USER_EDITED', 'The user password has been successfully changed.');
+        return helper.successResponse(response, 'PASSWORD_CHANGED', 'The user password has been successfully changed.');
     } catch(error) {
         console.warn(error);
-        return errorResponse(response, error.key, error.message);
+        return helper.errorResponse(response, error.key, error.message);
     }
 }
 
@@ -137,13 +120,12 @@ exports.changePassword = async (request, response) => {
  */
 exports.edit = async (request, response) => {
     const { username, password, firstName, lastName, roleName, deactivatedUntil, adminUsername, adminPassword } = request.body;
-
     try {
         if(!((password || firstName || lastName || roleName || deactivatedUntil) && username && adminUsername && adminPassword)) {
             throw new IncompleteDataError('Change user data is incomplete.');
         }
 
-        const isAdminAccess = isAdmin(adminUsername, adminPassword);
+        const isAdminAccess = isAuthenticatedAdmin(adminUsername, adminPassword);
         const isExisting = isUserExisting(username);
         const hash = password ? hashPassword(password) : null;
 
@@ -168,10 +150,10 @@ exports.edit = async (request, response) => {
         await helper.executeQuery(queryString);
 
         console.log('User successfully edited. Username: %s', username);
-        return successResponse(response, 'USER_EDITED', 'The user has been successfully edited.');
+        return helper.successResponse(response, 'USER_EDITED', 'The user has been successfully edited.');
     } catch(error) {
         console.warn(error);
-        return errorResponse(response, error.key, error.message);
+        return helper.errorResponse(response, error.key, error.message);
     }
 }
 
@@ -185,21 +167,19 @@ exports.edit = async (request, response) => {
  */
 exports.delete = async (request, response) => {
     const { username, adminUsername, adminPassword } = request.body;
-
     try {
         if(!(username && adminUsername && adminPassword)) {
             throw new IncompleteDataError('Change user data is incomplete.');
         }
 
-        const [isAdminAccess, isExisting] = await Promise.all([
-            isAdmin(adminUsername, adminPassword),
-            isUserExisting(username)
-        ]);
-        if(!isAdminAccess) {
+        const isAdminAccess = isAuthenticatedAdmin(adminUsername, adminPassword);
+        const isExisting = isUserExisting(username);
+
+        if(!await isAdminAccess) {
             throw new AccessRightsError();
         }
 
-        if(!isExisting) {
+        if(!await isExisting) {
             throw new IncorrectDataError();
         }
 
@@ -207,14 +187,74 @@ exports.delete = async (request, response) => {
         await helper.executeQuery(queryString);
             
         console.log('User successfully deleted. Username: %s', username);
-        return successResponse(response, 'USER_DELETED', 'The user was successfully deleted.');
-
+        return helper.successResponse(response, 'USER_DELETED', 'The user was successfully deleted.');
     } catch(error) {
         console.warn(error);
-        return errorResponse(response, error.key, error.message);
+        return helper.errorResponse(response, error.key, error.message);
     }
 }
 
+/**
+ * isAuthenticatedUser - Checks if the user can authenticate himself and is activated.
+ * 
+ * @param username  the user name of the user to be checked
+ * @param password  the user password of the user to be checked
+ * @return          a promise to be either resolved with the authentication check result or rejected with an error
+ * 
+ * Do not specify which user data is specifically wrong to not disclose information about existing user data
+ */
+function isAuthenticatedUser(username, password) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            if(!(username && password)) {
+                throw new IncompleteDataError('Username and password required.');
+            }
+    
+            if(!await isUserExisting(username)) {
+                throw new IncorrectDataError();
+            }
+    
+            const queryString = `SELECT password FROM vze_user WHERE username='${username}'`;
+            const isActivated = isUserActivated(username);
+            const data = await helper.executeQuery(queryString);
+
+            const isAuthenticated = await isActivated && await isPasswordMatch(password, data['password']);
+            console.log('User \'%s\' is authenticated: ', username, isAuthenticated);
+            resolve(isAuthenticated);
+        } catch(error) {
+            reject(error);
+        }
+    });
+}
+exports.isAuthenticatedUser = isAuthenticatedUser;
+
+/**
+ * isAuthenticatedAdmin - Check if the user is authenticated and has admin rights
+ * 
+ * @param username the user name of the admin to be checked
+ * @param password the user password of the admin to be checked
+ */
+function isAuthenticatedAdmin(username, password) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            if(!await isAuthenticatedUser(username, password)) {
+                throw new IncorrectDataError();
+            }
+
+            const queryString = `SELECT r.role_name 
+                FROM vze_user u
+                INNER JOIN vze_role r ON r.id = u.vze_role_id
+                WHERE u.username='${username}'`;
+
+            const data = await helper.executeQuery(queryString);
+            isAdminAccess = ('admin' === data['role_name']);
+            console.log('Admin access granted for user \'%s\': ', username, isAdminAccess);
+            resolve(isAdminAccess)  
+        } catch(error) {
+            reject(error);
+        }
+    });
+}
 
 /**
  *  isUserExisting - User Existence Check.
@@ -223,23 +263,24 @@ exports.delete = async (request, response) => {
  *  @return         a promise to be either resolved with the existence check result or rejected with an error
  */
 function isUserExisting(username) {
-    return new Promise((resolve, reject) => {
-        if(!username) {
-            reject(new IncompleteDataError('The username is required to check if the user exists.'));
-        }
+    return new Promise(async (resolve, reject) => {
+        try {
+            if(!username) {
+                throw new IncompleteDataError('The username is required to check if the user exists.');
+            }
 
-        const queryString = `SELECT COUNT(username) 
-            FROM vze_user 
-            WHERE username='${username}'`;
+            const queryString = `SELECT COUNT(username) 
+                FROM vze_user 
+                WHERE username='${username}'`;
 
-        helper.executeQuery(queryString).then((data) => {
+            const data =  await helper.executeQuery(queryString);
             let isUserExisting = (data['count'] > 0);
-            console.log('User \'%s\' exists: ', username, isUserExisting);
 
+            console.log('User \'%s\' exists: ', username, isUserExisting);         
             resolve(isUserExisting);
-        }).catch((error) => {
+        } catch(error) {
             reject(error);
-        });
+        };
     });
 }
 
@@ -250,62 +291,24 @@ function isUserExisting(username) {
  *  @return         a promise to be either resolved with the activated check result or rejected with an error
  */
 function isUserActivated(username) {
-    return new Promise((resolve, reject) => {
-        if(!username) {
-            reject(new IncompleteDataError('The username is required to check if the user is activated.'));
-        }
-
-        const queryString = `SELECT deactivated_until 
-            FROM vze_user 
-            WHERE username='${username}'`;
-
-        helper.executeQuery(queryString).then((data) => {
-            let isActivated = !(data['deactivated_until'] != null && new Date(data['deactivated_until']) > new Date());      
-            console.log('User \'%s\' activated: ', username, isActivated);
-            
-            resolve(isActivated);
-        }).catch((error) => {
-            reject(error);
-        });
-    });
-}
-
-/**
- * isAdmin - Check if the user has admin rights
- * 
- * @param username the user name of the admin to be checked
- * @param password the user password of the admin to be checked
- */
-function isAdmin(username, password) {
     return new Promise(async (resolve, reject) => {
-        if(!(username && password)) {
-            reject(new IncompleteDataError('The username is required to check if the user has the role of an admin.'));
-        }
-
-        if(!await isUserExisting(username)) {
-            reject(new IncorrectDataError());
-        }
-
-        const queryString = `SELECT u.password, r.role_name 
-            FROM vze_user u
-            INNER JOIN vze_role r ON r.id = u.vze_role_id
-            WHERE u.username='${username}'`;
-
-        Promise.all([
-            isUserActivated(username),
-            helper.executeQuery(queryString)
-        ])
-        .then(async ([isActivated, data]) => {
-            if(!isActivated || !await comparePassword(password, data['password'])) {
-                throw new IncorrectDataError();
+        try {
+            if(!username) {
+                throw new IncompleteDataError('The username is required to check if the user is activated.');
             }
 
-            isAdminAccess = ('admin' === data['role_name']);
-            console.log('Admin access granted: ', isAdminAccess);
-            resolve(isAdminAccess)   
-        }).catch((error) => {
+            const queryString = `SELECT deactivated_until 
+                FROM vze_user 
+                WHERE username='${username}'`;
+
+            const data =  await helper.executeQuery(queryString);
+            let isActivated = !(data['deactivated_until'] != null && new Date(data['deactivated_until']) > new Date());      
+            
+            console.log('User \'%s\' activated: ', username, isActivated);           
+            resolve(isActivated);
+        } catch(error) {
             reject(error);
-        });
+        };
     });
 }
 
@@ -336,63 +339,25 @@ function hashPassword(password) {
 exports.hashPassword = hashPassword;
 
 /**
- * comparePassword - the bcrypt libary is used to compare the plaintext password entered by the user with the hashed password from the database.
+ * isPasswordMatch - the bcrypt libary is used to compare the plaintext password entered by the user with the hashed password from the database.
  * @see https://www.npmjs.com/package/bcrypt
  * 
  * @param userPassword      hashed password which is stored in the database
  * @param enteredPassword   plaintext password entered by the user which is to be compared with the {@code userPassword} from the database
  * @returns                 a callback which indicates whether the passwords match
  */
-function comparePassword(plaintextPassword, hashedPassword) {
+function isPasswordMatch(plaintextPassword, hashedPassword) {
     return new Promise(async (resolve, reject) => {
         if(!(plaintextPassword && hashedPassword)) {
             reject(new IncompleteDataError('Send password and hash for comparison.'));
         }
 
-        bcrypt.compare(plaintextPassword, hashedPassword).then((isMatch) => {
+        try {
+            const isMatch =  await bcrypt.compare(plaintextPassword, hashedPassword);
             console.log('Entered passwords match: ', isMatch);
             resolve(isMatch);
-        }).catch((error) => {
+        } catch (error) {
             reject(new ModuleOperationError('Password comparison failed.'));
-        });
+        }
     });
-}
-
-/**
- *  errorResponse - Creates a error response to the client in the form of a JSON object, which can contain a status and message.
- *
- *  @param response http.ServerResponse - used to send the error message to the client in the form of a JSON object
- *  @param key      key that specifies the error
- *  @param message  specific error message for the response
- *  @return         http.ServerResponse that transmits a JSON object
- */
-function errorResponse(response, key, message) {
-    return response.status(400).json({
-        'status': 'error',
-        'key' : key ? key : 'UNKNOWN',
-        'msg': message ? message : 'Unknown error.'
-    });
-}
-
-/**
- *  successResponse - Creates a sucess response to the client in the form of a JSON object, which can contain a status, a message, as well as a data set.
- *
- *  @param response http.ServerResponse - used to send the success message to the client in the form of a JSON object
- *  @param key      key that specifies the type of the successful request
- *  @param message  specific success message for the response
- *  @param data     encludes optional data to attach to the response e.g. a user
- *  @return         http.ServerResponse that transmits a JSON object
- */
-function successResponse(response, key, message, data) {
-    let jsonObj = {
-        'status': 'success',
-        'key' : key ? key : 'UNKNOWN',
-        'msg': message ? message : 'Request successful.'
-    };
-
-    if(data) {
-        jsonObj['data'] = data;
-    }
-
-    return response.status(200).json(jsonObj);
 }

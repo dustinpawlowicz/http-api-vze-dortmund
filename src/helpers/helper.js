@@ -22,3 +22,42 @@ exports.executeQuery = (queryString) => {
         });
     });
 }
+
+/**
+ *  errorResponse - Creates a error response to the client in the form of a JSON object, which can contain a status and message.
+ *
+ *  @param response http.ServerResponse - used to send the error message to the client in the form of a JSON object
+ *  @param key      key that specifies the error
+ *  @param message  specific error message for the response
+ *  @return         http.ServerResponse that transmits a JSON object
+ */
+exports.errorResponse = (response, key, message) => {
+    return response.status(400).json({
+        'status': 'error',
+        'key' : key ? key : 'UNKNOWN',
+        'msg': message ? message : 'Unknown error.'
+    });
+}
+
+/**
+ *  successResponse - Creates a sucess response to the client in the form of a JSON object, which can contain a status, a message, as well as a data set.
+ *
+ *  @param response http.ServerResponse - used to send the success message to the client in the form of a JSON object
+ *  @param key      key that specifies the type of the successful request
+ *  @param message  specific success message for the response
+ *  @param data     encludes optional data to attach to the response e.g. a user
+ *  @return         http.ServerResponse that transmits a JSON object
+ */
+exports.successResponse = (response, key, message, data) => {
+    let jsonObj = {
+        'status': 'success',
+        'key' : key ? key : 'UNKNOWN',
+        'msg': message ? message : 'Request successful.'
+    };
+
+    if(data) {
+        jsonObj['data'] = data;
+    }
+
+    return response.status(200).json(jsonObj);
+}

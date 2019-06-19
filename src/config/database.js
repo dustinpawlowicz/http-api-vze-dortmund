@@ -13,7 +13,7 @@ const config = {
   
 const pool = new pg.Pool(config);
 
-const createTables = async () => {
+async function createTables() {
     try {
         const adminHash = userController.hashPassword(user_password);
         const inspectorHash = userController.hashPassword(user_password);

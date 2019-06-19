@@ -10,8 +10,10 @@ Node.js is an asynchronous, event-driven JavaScript runtime that is designed to 
     API:        https://nodejs.org/dist/latest-v12.x/docs/api/
 
 ### Setting up the project
+```
 npm init -y
 npm install --save express pg body-parser bcrypt dotenv
+```
 
 ### Modules and API
 #### Express

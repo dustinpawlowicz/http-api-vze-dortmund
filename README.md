@@ -25,18 +25,18 @@ Web framework for Node.js - https://expressjs.com/de/.
 #### node-postgres
 Collection of Node.js modules to interface with the PostgreSQL database - https://node-postgres.com/.
 
-    npm:        https://www.npmjs.com/package/pg
-    API:        https://node-postgres.com/api/pool
+    npm:    https://www.npmjs.com/package/pg
+    API:    https://node-postgres.com/api/pool
 
 #### body-parser
 Node.js body parsing middleware.
 
-    npm:        https://www.npmjs.com/package/body-parser
+    npm:    https://www.npmjs.com/package/body-parser
 
 #### node.bcrypt.js
 A Library to hash passwords.
 
-    npm:        https://www.npmjs.com/package/bcrypt
+    npm:    https://www.npmjs.com/package/bcrypt
     
 #### dotenv
 Module to load environment variables from a .env file into process.env.

@@ -159,7 +159,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 6.  This software includes the 'cors' package to enable Cross-origin resource sharing (CORS)
-    from a .env file into process.env:
 ---------------COPYING.cors-----BEGIN-------------------------------
 (The MIT License)
 

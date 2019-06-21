@@ -14,6 +14,7 @@ const helper = require('../helpers/helper');
  */
 exports.login = async (request, response) => {
     const { username, password } = request.body;  
+    console.log(request.body);
     try {
         if(!await isAuthenticatedUser(username, password)) {
             throw new IncorrectDataError();

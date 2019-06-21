@@ -12,7 +12,7 @@ Node.js is an asynchronous, event-driven JavaScript runtime that is designed to 
 ### Setting up the project
 ```
 npm init -y
-npm install --save express pg body-parser bcrypt dotenv
+npm install --save express pg body-parser bcrypt dotenv cors
 ```
 
 ### Modules and API
@@ -42,3 +42,8 @@ A Library to hash passwords.
 Module to load environment variables from a .env file into process.env.
 
     npm:    https://www.npmjs.com/package/dotenv
+
+#### cors
+Middleware that can be used to enable Cross-origin resource sharing (CORS)
+
+    npm:    https://www.npmjs.com/package/cors

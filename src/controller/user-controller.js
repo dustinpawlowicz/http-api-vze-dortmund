@@ -20,7 +20,7 @@ exports.login = async (request, response) => {
             throw new IncorrectDataError();
         }
 
-        const queryString = `SELECT u.username, u.first_name, u.last_name, r.role_name
+        const queryString = `SELECT u.id, u.username, u.first_name, u.last_name, r.role_name
                 FROM vze_user u
                 INNER JOIN vze_role r ON r.id = u.vze_role_id
                 WHERE u.username='${username}'`;

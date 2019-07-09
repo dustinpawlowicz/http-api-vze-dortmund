@@ -53,7 +53,7 @@ exports.getEdges = async (request, response) => {
 
         const queryString = `SELECT array_to_json(array_agg(row_to_json(t))) edges 
             FROM (	
-                SELECT id, road_key, road_number, road_name, section_number, from_node_key, to_node_key, road_length,
+                SELECT id, road_number, road_name, section_number, from_node_key, to_node_key, road_length,
                     house_number_from_right, house_number_to_right, house_number_from_left, house_number_to_left,
                     ST_AsGeoJSON(ST_Transform(geometry, 4326))::jsonb geometry
                 FROM road_network_edge

@@ -1,4 +1,4 @@
-const { IncompleteDataError, IncorrectDataError, AccessRightsError } = require('../errors/error');
+const { IncompleteDataError, IncorrectDataError, AccessRightsError, UserDeactivatedError } = require('../errors/error');
 const bcrypt = require('bcrypt');
 const helper = require('../helpers/helper');
 
@@ -14,7 +14,6 @@ const helper = require('../helpers/helper');
  */
 exports.login = async (request, response) => {
     const { username, password } = request.body;  
-    console.log(request.body);
     try {
         if(!await isAuthenticatedUser(username, password)) {
             throw new IncorrectDataError();
@@ -30,7 +29,7 @@ exports.login = async (request, response) => {
         return helper.successResponse(response, 'USER_REQUESTED', 'User request successful.', data);
     } catch(error) {
         console.warn(error);
-        return helper.errorResponse(response, error.key, error.message);
+        return helper.errorResponse(response, error);
     }
 }
 
@@ -48,7 +47,7 @@ exports.register = async function (request, response) {
         if(!(username && password && firstName && lastName && roleName && adminUsername && adminPassword)) {
             throw new IncompleteDataError('Registration data incomplete.');
         }
-        
+        console.log(username, password, firstName, lastName, roleName, adminUsername, adminPassword)
         const isAdminAccess = isAuthenticatedAdmin(adminUsername, adminPassword);
         const isExisting = isUserExisting(username);
         const hash = hashPassword(password);
@@ -70,7 +69,7 @@ exports.register = async function (request, response) {
         return helper.successResponse(response, 'USER_CREATED', 'The user was successfully created.');
     } catch(error) {
         console.warn(error);
-        return helper.errorResponse(response, error.key, error.message);
+        return helper.errorResponse(response, error);
     }
 }
 
@@ -106,7 +105,7 @@ exports.changePassword = async (request, response) => {
         return helper.successResponse(response, 'PASSWORD_CHANGED', 'The user password has been successfully changed.');
     } catch(error) {
         console.warn(error);
-        return helper.errorResponse(response, error.key, error.message);
+        return helper.errorResponse(response, error);
     }
 }
 
@@ -122,7 +121,7 @@ exports.changePassword = async (request, response) => {
 exports.edit = async (request, response) => {
     const { username, password, firstName, lastName, roleName, deactivatedUntil, adminUsername, adminPassword } = request.body;
     try {
-        if(!((password || firstName || lastName || roleName || deactivatedUntil) && username && adminUsername && adminPassword)) {
+        if(!((password || firstName || lastName || roleName || deactivatedUntil != null) && username && adminUsername && adminPassword)) {
             throw new IncompleteDataError('Change user data is incomplete.');
         }
 
@@ -138,23 +137,28 @@ exports.edit = async (request, response) => {
             throw new IncorrectDataError();
         }
 
+        let isDateValid = false;
+        if(deactivatedUntil != null) {
+            const date = new Date(deactivatedUntil);
+            isDateValid = date instanceof Date && !isNaN(date);
+        }
+
         let queryString = `UPDATE vze_user SET` +
             (password ? ` password = '${await hash}',` : ``) +
             (firstName ? ` first_name = '${firstName}',` : ``) +
             (lastName ? ` last_name = '${lastName}',` : ``) +
             (roleName ? ` vze_role_id = (SELECT id FROM vze_role WHERE role_name = '${roleName}'),` : ``) +
-            (deactivatedUntil && (new Date(deactivatedUntil)).getTime() > 0 ? ` deactivated_until = '${deactivatedUntil}' ` : ``);
-            
+            (deactivatedUntil != null ? (` deactivated_until = ` + (isDateValid ? `'${deactivatedUntil}'` : 'NULL') + ` `) : ``);
+
         queryString = queryString.substring(0, queryString.length - 1); // Remove unneeded separator from last entry.
-        queryString += ` WHERE username = '${username}'`;    
-        console.log(queryString);      
+        queryString += ` WHERE username = '${username}'`;
         await helper.executeQuery(queryString);
 
         console.log('User successfully edited. Username: %s', username);
         return helper.successResponse(response, 'USER_EDITED', 'The user has been successfully edited.');
     } catch(error) {
         console.warn(error);
-        return helper.errorResponse(response, error.key, error.message);
+        return helper.errorResponse(response, error);
     }
 }
 
@@ -191,7 +195,7 @@ exports.delete = async (request, response) => {
         return helper.successResponse(response, 'USER_DELETED', 'The user was successfully deleted.');
     } catch(error) {
         console.warn(error);
-        return helper.errorResponse(response, error.key, error.message);
+        return helper.errorResponse(response, error);
     }
 }
 
@@ -215,11 +219,15 @@ function isAuthenticatedUser(username, password) {
                 throw new IncorrectDataError();
             }
     
+            const isDeactivated = isUserDeactivated(username);
             const queryString = `SELECT password FROM vze_user WHERE username='${username}'`;
-            const isActivated = isUserActivated(username);
             const data = await helper.executeQuery(queryString);
 
-            const isAuthenticated = await isActivated && await isPasswordMatch(password, data['password']);
+            if(await isDeactivated) {
+                throw new UserDeactivatedError(null, await isDeactivated);
+            }
+
+            const isAuthenticated = !await isDeactivated && await isPasswordMatch(password, data['password']);
             console.log('User \'%s\' is authenticated: ', username, isAuthenticated);
             resolve(isAuthenticated);
         } catch(error) {
@@ -228,6 +236,67 @@ function isAuthenticatedUser(username, password) {
     });
 }
 exports.isAuthenticatedUser = isAuthenticatedUser;
+
+/**
+ *  getRoles - Request all existing roles
+ *
+ *  @param request  http.IncomingMessage
+ *  @param response http.ServerResponse - used to send data back to the client
+ *  @return         http.ServerResponse with a json object containing the result information
+ */
+exports.getRoles = async (request, response) => {
+    try {
+        const queryString =  `SELECT array_to_json(array_agg(row_to_json(t))) roles
+            FROM (
+                SELECT *
+                FROM vze_role
+            ) t`;
+
+        const data = await helper.executeQuery(queryString);
+        console.log('Roles successfully requested.');
+        return helper.successResponse(response, 'ROLES_REQUESTED', 'Roles request successful.', data);
+    } catch(error) {
+        console.warn(error);
+        return helper.errorResponse(response, error);
+    }
+}
+
+/**
+ *  getUsers - Request all existing users
+ *
+ *  @param request  http.IncomingMessage
+ *  @param response http.ServerResponse - used to send data back to the client
+ *  @return         http.ServerResponse with a json object containing the result information
+ */
+exports.getUsers = async (request, response) => {
+    const { adminUsername, adminPassword } = request.body;
+
+    try {
+        if(!(adminUsername && adminPassword)) {
+            throw new IncompleteDataError('Incomplete data to fetch users.');
+        }
+        console.log(adminUsername, adminPassword)
+        const isAdminAccess = isAuthenticatedAdmin(adminUsername, adminPassword);
+
+        if(!await isAdminAccess) {
+            throw new AccessRightsError();
+        }
+
+        const queryString =  `SELECT array_to_json(array_agg(row_to_json(t))) users
+            FROM (
+                SELECT u.id, u.username, u.first_name, u.last_name, r.role_name, u.deactivated_until
+                FROM vze_user u
+                INNER JOIN vze_role r ON r.id = u.vze_role_id
+            ) t`;
+            console.log(queryString);
+        const data = await helper.executeQuery(queryString);
+        console.log('Users successfully requested.');
+        return helper.successResponse(response, 'USERS_REQUESTED', 'Users request successful.', data);
+    } catch(error) {
+        console.warn(error);
+        return helper.errorResponse(response, error);
+    }
+}
 
 /**
  * isAuthenticatedAdmin - Check if the user is authenticated and has admin rights
@@ -286,12 +355,12 @@ function isUserExisting(username) {
 }
 
 /**
- *  isUserActivated - Check whether the user is activated.
+ *  isUserDeactivated - Check whether the user is deactivated.
  * 
  *  @param username the user name of the user to be checked
- *  @return         a promise to be either resolved with the activated check result or rejected with an error
+ *  @return         a promise to be either resolved with the deactivated check result or rejected with an error
  */
-function isUserActivated(username) {
+function isUserDeactivated(username) {
     return new Promise(async (resolve, reject) => {
         try {
             if(!username) {
@@ -303,10 +372,15 @@ function isUserActivated(username) {
                 WHERE username='${username}'`;
 
             const data =  await helper.executeQuery(queryString);
-            let isActivated = !(data['deactivated_until'] != null && new Date(data['deactivated_until']) > new Date());      
-            
-            console.log('User \'%s\' activated: ', username, isActivated);           
-            resolve(isActivated);
+
+            let isDeactivated = null;
+            if(data['deactivated_until'] != null) {
+                const date = new Date(data['deactivated_until']);
+                isDeactivated = (date instanceof Date && !isNaN(date) && date.getTime() > new Date().getTime()) ? data['deactivated_until'] : null;
+            }
+
+            console.log('User \'%s\' deactivated until \'%s\.', username, isDeactivated); 
+            resolve(isDeactivated);
         } catch(error) {
             reject(error);
         };

@@ -27,16 +27,21 @@ exports.executeQuery = (queryString) => {
  *  errorResponse - Creates a error response to the client in the form of a JSON object, which can contain a status and message.
  *
  *  @param response http.ServerResponse - used to send the error message to the client in the form of a JSON object
- *  @param key      key that specifies the error
- *  @param message  specific error message for the response
+ *  @param error    the error to be handled
  *  @return         http.ServerResponse that transmits a JSON object
  */
-exports.errorResponse = (response, key, message) => {
-    return response.status(400).json({
+exports.errorResponse = (response, error) => {
+    let jsonObj = {
         'status': 'error',
-        'key' : key ? key : 'UNKNOWN',
-        'msg': message ? message : 'Unknown error.'
-    });
+        'key' : error.key ? error.key : 'UNKNOWN',
+        'msg': error.message ? error.message : 'Unknown error.'
+    };
+
+    if(error.data) {
+        jsonObj['data'] = error.data;
+    }
+
+    return response.status(400).json(jsonObj);
 }
 
 /**

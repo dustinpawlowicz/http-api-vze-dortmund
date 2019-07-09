@@ -12,7 +12,10 @@ routes.post('/register', userController.register);
 routes.post('/changePassword', userController.changePassword);
 routes.post('/editUser', userController.edit);
 routes.post('/deleteUser', userController.delete);
+routes.get('/roles', userController.getRoles);
+routes.post('/users', userController.getUsers);
 
 routes.post('/nodes', roadNetworkController.getNodes);
 routes.post('/edges', roadNetworkController.getEdges);
+
 module.exports = routes;

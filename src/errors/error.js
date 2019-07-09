@@ -43,10 +43,20 @@ class AccessRightsError extends Error {
   }
 }
 
+class UserDeactivatedError extends Error {
+  constructor(message, deactivatedUntil) {
+    super(message);
+    this.name = this.constructor.name;
+    this.key = 'USER_DEACTIVATED';
+    this.message = message ? message : 'The user is deactivated.';
+    this.data = { "deactivatedUntil": new Date(deactivatedUntil).toUTCString() };
+  }
+}
 
 module.exports = {
   IncompleteDataError,
   IncorrectDataError,
   SqlQueryError,
-  AccessRightsError
+  AccessRightsError,
+  UserDeactivatedError
 };

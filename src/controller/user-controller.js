@@ -288,7 +288,6 @@ exports.getUsers = async (request, response) => {
                 FROM vze_user u
                 INNER JOIN vze_role r ON r.id = u.vze_role_id
             ) t`;
-            console.log(queryString);
         const data = await helper.executeQuery(queryString);
         console.log('Users successfully requested.');
         return helper.successResponse(response, 'USERS_REQUESTED', 'Users request successful.', data);

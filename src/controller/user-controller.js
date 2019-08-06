@@ -19,9 +19,9 @@ exports.login = async (request, response) => {
             throw new IncorrectDataError();
         }
 
-        const queryString = `SELECT u.id, u.username, u.first_name, u.last_name, r.role_name
+        const queryString = `SELECT u.id, u.username, u.first_name, u.last_name, r.name AS role_name
                 FROM vze_user u
-                INNER JOIN vze_role r ON r.id = u.vze_role_id
+                INNER JOIN vze_user_role r ON r.id = u.role_id
                 WHERE u.username='${username}'`;
 
         const data = await helper.executeQuery(queryString);
@@ -48,21 +48,21 @@ exports.register = async function (request, response) {
             throw new IncompleteDataError('Registration data incomplete.');
         }
         console.log(username, password, firstName, lastName, roleName, adminUsername, adminPassword)
-        const isAdminAccess = isAuthenticatedAdmin(adminUsername, adminPassword);
-        const isExisting = isUserExisting(username);
         const hash = hashPassword(password);
+        const isAdminAccess = await isAuthenticatedAdmin(adminUsername, adminPassword);
+        const isExisting = await isUserExisting(username);
 
-        if(!await isAdminAccess) {
+        if(!isAdminAccess) {
             throw new AccessRightsError();
         }
 
-        if(await isExisting) {
+        if(isExisting) {
             throw new IncorrectDataError('The username already exists.');
         }
 
-        const  queryString = `INSERT INTO vze_user(username, password, first_name, last_name, vze_role_id)
+        const  queryString = `INSERT INTO vze_user(username, password, first_name, last_name, role_id)
             VALUES('${username}', '${await hash}', '${firstName}', '${lastName}',
-                (SELECT id FROM vze_role WHERE role_name = '${roleName}'))`;
+                (SELECT id FROM vze_user_role WHERE name = '${roleName}'))`;
         await helper.executeQuery(queryString);
             
         console.log('New user \'%s\' with the role of an \'%s\' added.', username, roleName);
@@ -125,15 +125,15 @@ exports.edit = async (request, response) => {
             throw new IncompleteDataError('Change user data is incomplete.');
         }
 
-        const isAdminAccess = isAuthenticatedAdmin(adminUsername, adminPassword);
-        const isExisting = isUserExisting(username);
         const hash = password ? hashPassword(password) : null;
+        const isAdminAccess = await isAuthenticatedAdmin(adminUsername, adminPassword);
+        const isExisting = await isUserExisting(username);
 
-        if(!await isAdminAccess) {
+        if(!isAdminAccess) {
             throw new AccessRightsError();
         }
 
-        if(!await isExisting) {
+        if(!isExisting) {
             throw new IncorrectDataError();
         }
 
@@ -147,7 +147,7 @@ exports.edit = async (request, response) => {
             (password ? ` password = '${await hash}',` : ``) +
             (firstName ? ` first_name = '${firstName}',` : ``) +
             (lastName ? ` last_name = '${lastName}',` : ``) +
-            (roleName ? ` vze_role_id = (SELECT id FROM vze_role WHERE role_name = '${roleName}'),` : ``) +
+            (roleName ? ` role_id = (SELECT id FROM vze_user_role WHERE name = '${roleName}'),` : ``) +
             (deactivatedUntil != null ? (` deactivated_until = ` + (isDateValid ? `'${deactivatedUntil}'` : 'NULL') + ` `) : ``);
 
         queryString = queryString.substring(0, queryString.length - 1); // Remove unneeded separator from last entry.
@@ -177,14 +177,14 @@ exports.delete = async (request, response) => {
             throw new IncompleteDataError('Change user data is incomplete.');
         }
 
-        const isAdminAccess = isAuthenticatedAdmin(adminUsername, adminPassword);
-        const isExisting = isUserExisting(username);
+        const isAdminAccess = await isAuthenticatedAdmin(adminUsername, adminPassword);
+        const isExisting = await isUserExisting(username);
 
-        if(!await isAdminAccess) {
+        if(!isAdminAccess) {
             throw new AccessRightsError();
         }
 
-        if(!await isExisting) {
+        if(!isExisting) {
             throw new IncorrectDataError();
         }
 
@@ -249,7 +249,7 @@ exports.getRoles = async (request, response) => {
         const queryString =  `SELECT array_to_json(array_agg(row_to_json(t))) roles
             FROM (
                 SELECT *
-                FROM vze_role
+                FROM vze_user_role
             ) t`;
 
         const data = await helper.executeQuery(queryString);
@@ -276,17 +276,17 @@ exports.getUsers = async (request, response) => {
             throw new IncompleteDataError('Incomplete data to fetch users.');
         }
         console.log(adminUsername, adminPassword)
-        const isAdminAccess = isAuthenticatedAdmin(adminUsername, adminPassword);
+        const isAdminAccess = await isAuthenticatedAdmin(adminUsername, adminPassword);
 
-        if(!await isAdminAccess) {
+        if(!isAdminAccess) {
             throw new AccessRightsError();
         }
 
         const queryString =  `SELECT array_to_json(array_agg(row_to_json(t))) users
             FROM (
-                SELECT u.id, u.username, u.first_name, u.last_name, r.role_name, u.deactivated_until
+                SELECT u.id, u.username, u.first_name, u.last_name, r.name AS role_name, u.deactivated_until
                 FROM vze_user u
-                INNER JOIN vze_role r ON r.id = u.vze_role_id
+                INNER JOIN vze_user_role r ON r.id = u.role_id
             ) t`;
         const data = await helper.executeQuery(queryString);
         console.log('Users successfully requested.');
@@ -310,9 +310,9 @@ function isAuthenticatedAdmin(username, password) {
                 throw new IncorrectDataError();
             }
 
-            const queryString = `SELECT r.role_name 
+            const queryString = `SELECT r.name AS role_name
                 FROM vze_user u
-                INNER JOIN vze_role r ON r.id = u.vze_role_id
+                INNER JOIN vze_user_role r ON r.id = u.role_id
                 WHERE u.username='${username}'`;
 
             const data = await helper.executeQuery(queryString);

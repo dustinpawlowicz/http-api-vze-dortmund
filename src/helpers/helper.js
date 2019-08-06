@@ -15,7 +15,7 @@ exports.executeQuery = (queryString) => {
 
         pool.query(queryString, (error, result) => {
             if(error) {
-                reject(new SqlQueryError("Error when executing the transferred SQL statement."));
+                reject(new SqlQueryError("Error when executing the transferred SQL statement. " + error));
             }
             
             resolve(typeof result === 'undefined' ? {} : result.rows[0]);
@@ -34,12 +34,9 @@ exports.errorResponse = (response, error) => {
     let jsonObj = {
         'status': 'error',
         'key' : error.key ? error.key : 'UNKNOWN',
-        'msg': error.message ? error.message : 'Unknown error.'
+        'msg': error.message ? error.message : 'Unknown error.',
+        'data': error.data ? error.data : {}
     };
-
-    if(error.data) {
-        jsonObj['data'] = error.data;
-    }
 
     return response.status(400).json(jsonObj);
 }
@@ -57,12 +54,9 @@ exports.successResponse = (response, key, message, data) => {
     let jsonObj = {
         'status': 'success',
         'key' : key ? key : 'UNKNOWN',
-        'msg': message ? message : 'Request successful.'
+        'msg': message ? message : 'Request successful.',
+        'data': data ? data : {}
     };
-
-    if(data) {
-        jsonObj['data'] = data;
-    }
 
     return response.status(200).json(jsonObj);
 }

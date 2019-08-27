@@ -5,7 +5,7 @@ const roadNetworkController = require('./controller/road-network-controller');
 const roadConditionRecording = require('./controller/road-condition-recording');
 
 routes.get('/', (request, response) => {
-    return response.send('This is the VZE Dortmund RESTful API, running with Node.js, Express, and Postgres!')
+    return response.send('This is the VZE Dortmund HTTP API, running with Node.js, Express, and Postgres!')
 });
 
 routes.post('/login', userController.login);

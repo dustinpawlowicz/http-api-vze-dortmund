@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 const helper = require('../helpers/helper');
 
 /**
- *  loginUser - Requesting a user with the user data required on the client.
+ *  login - Requesting a user with the user data required on the client.
  *              Requirements for a Successful Request: user is authenticated
  * 
  *  @param request  http.IncomingMessage - used to get the username and password from the body of the post request
@@ -34,7 +34,7 @@ exports.login = async (request, response) => {
 }
 
 /**
- *  registerUser - Requesting a user with the user data required on the client. Restricted access, which can only be performed by an admin.
+ *  register - Requesting a user with the user data required on the client. Restricted access, which can only be performed by an admin.
  *                 Requirements for a Successful Request: request by an admin, user is not existing, password is hashed
  * 
  *  @param request  http.IncomingMessage - used to get the username and password from the body of the post request
@@ -47,10 +47,11 @@ exports.register = async function (request, response) {
         if(!(username && password && firstName && lastName && roleName && adminUsername && adminPassword)) {
             throw new IncompleteDataError('Registration data incomplete.');
         }
-        console.log(username, password, firstName, lastName, roleName, adminUsername, adminPassword)
         const hash = hashPassword(password);
-        const isAdminAccess = await isAuthenticatedAdmin(adminUsername, adminPassword);
-        const isExisting = await isUserExisting(username);
+        const [isAdminAccess, isExisting] = await Promise.all([
+            isAuthenticatedAdmin(adminUsername, adminPassword),
+            isUserExisting(username)
+        ]);
 
         if(!isAdminAccess) {
             throw new AccessRightsError();
